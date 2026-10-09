@@ -163,8 +163,7 @@ spec:
                 --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
                 --topic falco-alerts \
                 --from-beginning \
-                --timeout-ms 10000 \
-                --max-messages 100 \
+                --timeout-ms 5000 \
                 > /work/falco.jsonl \
                 2>/work/kafka-consumer.log || true
 
