@@ -257,74 +257,83 @@ data:
     spark.stop()
 ---
 apiVersion: batch/v1
-kind: Job
+kind: CronJob
 metadata:
   name: leviathan-spark-etl
   namespace: neo4j
 spec:
-  backoffLimit: 0
-  ttlSecondsAfterFinished: 600
-  template:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
     metadata:
       labels:
         app: leviathan-spark-etl
     spec:
-      restartPolicy: Never
-      enableServiceLinks: false
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          labels:
+            app: leviathan-spark-etl
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
 
-      initContainers:
-        - name: kafka-export
-          image: apache/kafka:4.3.1
-          command:
-            - /bin/bash
-            - -ec
-          args:
-            - |
-              /opt/kafka/bin/kafka-console-consumer.sh \
-                --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
-                --topic falco-alerts \
-                --from-beginning \
-                --timeout-ms 5000 \
-                > /work/falco.jsonl \
-                2>/work/kafka-consumer.log || true
+          initContainers:
+            - name: kafka-export
+              image: apache/kafka:4.3.1
+              command:
+                - /bin/bash
+                - -ec
+              args:
+                - |
+                  /opt/kafka/bin/kafka-console-consumer.sh \
+                    --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                    --topic falco-alerts \
+                    --from-beginning \
+                    --timeout-ms 5000 \
+                    > /work/falco.jsonl \
+                    2>/work/kafka-consumer.log || true
 
-              echo "Kafka records exported:"
-              wc -l /work/falco.jsonl
+                  echo "Kafka records exported:"
+                  wc -l /work/falco.jsonl
 
-              test -s /work/falco.jsonl
-          volumeMounts:
-            - name: work
-              mountPath: /work
+                  test -s /work/falco.jsonl
+              volumeMounts:
+                - name: work
+                  mountPath: /work
 
-      containers:
-        - name: spark
-          image: apache/spark:3.5.3
-          command:
-            - /opt/spark/bin/spark-submit
-            - --master
-            - local[1]
-            - --driver-memory
-            - 512m
-            - /opt/leviathan/etl.py
-          envFrom:
-            - secretRef:
-                name: neo4j-auth
-          resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: "1"
-              memory: 1024Mi
-          volumeMounts:
+          containers:
+            - name: spark
+              image: apache/spark:3.5.3
+              command:
+                - /opt/spark/bin/spark-submit
+                - --master
+                - local[1]
+                - --driver-memory
+                - 512m
+                - /opt/leviathan/etl.py
+              envFrom:
+                - secretRef:
+                    name: neo4j-auth
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 512Mi
+                limits:
+                  cpu: "1"
+                  memory: 1024Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /opt/leviathan
+                - name: work
+                  mountPath: /work
+
+          volumes:
             - name: script
-              mountPath: /opt/leviathan
+              configMap:
+                name: leviathan-spark-script
             - name: work
-              mountPath: /work
-
-      volumes:
-        - name: script
-          configMap:
-            name: leviathan-spark-script
-        - name: work
-          emptyDir: {}
+              emptyDir: {}
