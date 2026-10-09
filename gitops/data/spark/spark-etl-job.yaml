@@ -22,6 +22,7 @@ data:
     events = (
         raw
         .filter(F.col("rule") == "Leviathan Shell Spawned In Container")
+        .filter(F.col("output_fields.`k8s.ns.name`") == "leviathan")
         .select(
             F.col("uuid").alias("event_id"),
             F.col("time").alias("event_time"),
