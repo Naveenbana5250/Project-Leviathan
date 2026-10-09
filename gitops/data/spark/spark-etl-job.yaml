@@ -1,13 +1,180 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: leviathan-spark-script
+  namespace: neo4j
+data:
+  etl.py: |
+    from pyspark.sql import SparkSession, functions as F
+    import os
+    import json
+    import base64
+    import urllib.request
+
+    spark = (
+        SparkSession.builder
+        .appName("LeviathanSecurityETL")
+        .getOrCreate()
+    )
+
+    raw = spark.read.json("/work/falco.jsonl")
+
+    events = (
+        raw
+        .filter(F.col("rule") == "Leviathan Shell Spawned In Container")
+        .select(
+            F.col("uuid").alias("event_id"),
+            F.col("time").alias("event_time"),
+            F.col("rule"),
+            F.lower(F.col("priority")).alias("severity"),
+            F.col("source"),
+            F.col("output_fields.`k8s.ns.name`").alias("namespace"),
+            F.col("output_fields.`k8s.pod.name`").alias("pod"),
+            F.col("output_fields.`container.name`").alias("container"),
+            F.col("output_fields.`container.image.repository`").alias("image"),
+            F.col("output_fields.`proc.cmdline`").alias("command")
+        )
+        .withColumn(
+            "risk_score",
+            F.when(F.col("severity") == "emergency", 100)
+             .when(F.col("severity") == "alert", 95)
+             .when(F.col("severity") == "critical", 90)
+             .when(F.col("severity") == "error", 80)
+             .when(F.col("severity") == "warning", 70)
+             .when(F.col("severity") == "notice", 50)
+             .when(F.col("severity") == "informational", 30)
+             .otherwise(10)
+        )
+        .dropDuplicates(["event_id"])
+    )
+
+    print("=== LEVIATHAN NORMALIZED EVENTS ===", flush=True)
+    events.show(truncate=False)
+
+    rows = [r.asDict(recursive=True) for r in events.collect()]
+
+    if not rows:
+        raise RuntimeError(
+            "No Leviathan Shell Spawned In Container events found in Kafka."
+        )
+
+    auth = os.environ["NEO4J_AUTH"]
+    username, password = auth.split("/", 1)
+
+    token = base64.b64encode(
+        f"{username}:{password}".encode()
+    ).decode()
+
+    neo4j_url = (
+        "http://neo4j.neo4j.svc.cluster.local:7474/"
+        "db/neo4j/tx/commit"
+    )
+
+    cypher = """
+    MERGE (w:Workload {
+      namespace: $namespace,
+      pod: $pod
+    })
+    SET
+      w.container = $container,
+      w.image = $image
+
+    MERGE (r:FalcoRule {
+      name: $rule
+    })
+
+    MERGE (e:SecurityEvent {
+      uuid: $event_id
+    })
+    SET
+      e.time = $event_time,
+      e.severity = $severity,
+      e.source = $source,
+      e.command = $command,
+      e.risk = $risk_score
+
+    MERGE (w)-[:TRIGGERED]->(e)
+    MERGE (e)-[:DETECTED_BY]->(r)
+    """
+
+    statements = [
+        {
+            "statement": cypher,
+            "parameters": row
+        }
+        for row in rows
+    ]
+
+    payload = json.dumps({
+        "statements": statements
+    }).encode()
+
+    request = urllib.request.Request(
+        neo4j_url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {token}"
+        },
+        method="POST"
+    )
+
+    with urllib.request.urlopen(request, timeout=20) as response:
+        result = json.loads(response.read().decode())
+
+    if result.get("errors"):
+        raise RuntimeError(
+            "Neo4j write failed: " + json.dumps(result["errors"])
+        )
+
+    print(
+        f"LEVIATHAN_ETL_OK normalized={len(rows)} neo4j_written={len(rows)}",
+        flush=True
+    )
+
+    spark.stop()
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: leviathan-spark-etl
-  namespace: kafka
+  namespace: neo4j
 spec:
+  backoffLimit: 0
   ttlSecondsAfterFinished: 600
   template:
+    metadata:
+      labels:
+        app: leviathan-spark-etl
     spec:
       restartPolicy: Never
+      enableServiceLinks: false
+
+      initContainers:
+        - name: kafka-export
+          image: apache/kafka:4.3.1
+          command:
+            - /bin/bash
+            - -ec
+          args:
+            - |
+              /opt/kafka/bin/kafka-console-consumer.sh \
+                --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                --topic falco-alerts \
+                --from-beginning \
+                --timeout-ms 10000 \
+                --max-messages 100 \
+                > /work/falco.jsonl \
+                2>/work/kafka-consumer.log || true
+
+              echo "Kafka records exported:"
+              wc -l /work/falco.jsonl
+
+              test -s /work/falco.jsonl
+          volumeMounts:
+            - name: work
+              mountPath: /work
+
       containers:
         - name: spark
           image: apache/spark:3.5.3
@@ -15,7 +182,12 @@ spec:
             - /opt/spark/bin/spark-submit
             - --master
             - local[1]
+            - --driver-memory
+            - 512m
             - /opt/leviathan/etl.py
+          envFrom:
+            - secretRef:
+                name: neo4j-auth
           resources:
             requests:
               cpu: 250m
@@ -26,25 +198,12 @@ spec:
           volumeMounts:
             - name: script
               mountPath: /opt/leviathan
+            - name: work
+              mountPath: /work
+
       volumes:
         - name: script
           configMap:
             name: leviathan-spark-script
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: leviathan-spark-script
-  namespace: kafka
-data:
-  etl.py: |
-    from pyspark.sql import SparkSession
-    import json, time
-    spark = SparkSession.builder.appName("LeviathanETL").getOrCreate()
-    raw = [{"source":"falco","type":"demo_runtime_event","risk":80},
-           {"source":"honeytoken","type":"deception_hit","risk":95}]
-    df = spark.read.json(spark.sparkContext.parallelize([json.dumps(x) for x in raw]))
-    df = df.withColumnRenamed("type", "event_type")
-    df.show(truncate=False)
-    print("LEVIATHAN_ETL_OK", flush=True)
-    spark.stop()
+        - name: work
+          emptyDir: {}
