@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: leviathan-spark-etl
+  namespace: kafka
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: spark
+          image: apache/spark:3.5.3
+          command:
+            - /opt/spark/bin/spark-submit
+            - --master
+            - local[1]
+            - /opt/leviathan/etl.py
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1024Mi
+          volumeMounts:
+            - name: script
+              mountPath: /opt/leviathan
+      volumes:
+        - name: script
+          configMap:
+            name: leviathan-spark-script
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: leviathan-spark-script
+  namespace: kafka
+data:
+  etl.py: |
+    from pyspark.sql import SparkSession
+    import json, time
+    spark = SparkSession.builder.appName("LeviathanETL").getOrCreate()
+    raw = [{"source":"falco","type":"demo_runtime_event","risk":80},
+           {"source":"honeytoken","type":"deception_hit","risk":95}]
+    df = spark.read.json(spark.sparkContext.parallelize([json.dumps(x) for x in raw]))
+    df = df.withColumnRenamed("type", "event_type")
+    df.show(truncate=False)
+    print("LEVIATHAN_ETL_OK", flush=True)
+    spark.stop()

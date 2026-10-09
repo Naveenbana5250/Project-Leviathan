@@ -1,0 +1,81 @@
+name: Build, Push, Keyless Sign
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "apps/**"
+      - ".github/workflows/build-sign.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+
+jobs:
+  build-sign:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - name: vote
+            context: apps/vote
+            repo: leviathan-vote
+
+          - name: result
+            context: apps/result
+            repo: leviathan-result
+
+          - name: worker
+            context: apps/worker
+            repo: leviathan-worker
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.repo }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ matrix.repo }}:latest
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Keyless sign immutable digest
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ matrix.repo }}@${{ steps.build.outputs.digest }}"
+
+          CERT_IDENTITY="https""://github.com/${GITHUB_REPOSITORY}/.github/workflows/build-sign.yml@refs/heads/main"
+          OIDC_ISSUER="https""://token.actions.githubusercontent.com"
+
+          echo "Signing $IMAGE"
+          cosign sign --yes "$IMAGE"
+
+          echo "Verifying $IMAGE"
+          cosign verify \
+            --certificate-identity "$CERT_IDENTITY" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" \
+            "$IMAGE"

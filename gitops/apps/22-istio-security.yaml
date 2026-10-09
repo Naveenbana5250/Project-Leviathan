@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: leviathan-istio-security
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Naveenbana5250/Project-Leviathan.git
+    targetRevision: main
+    path: gitops/security/istio
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: leviathan
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

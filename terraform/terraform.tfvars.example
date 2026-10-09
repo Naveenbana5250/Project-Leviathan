@@ -1,0 +1,15 @@
+aws_region         = "ap-south-1"
+cluster_name       = "leviathan-eks"
+kubernetes_version = "1.36"
+
+github_owner  = "Naveenbana5250"
+github_repo   = "Project-Leviathan"
+github_branch = "main"
+
+node_instance_type = "m7i-flex.large"
+node_desired_size  = 1
+node_min_size      = 1
+node_max_size      = 2
+
+# For better security replace this with your current public IP, e.g. ["203.0.113.10/32"].
+public_access_cidrs = ["0.0.0.0/0"]

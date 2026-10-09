@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: honeytoken
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Naveenbana5250/Project-Leviathan.git
+    targetRevision: main
+    path: gitops/security/honeytoken
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: leviathan
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

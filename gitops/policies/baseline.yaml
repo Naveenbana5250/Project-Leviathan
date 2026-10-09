@@ -1,0 +1,63 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: leviathan-require-safe-pod-baseline
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: disallow-privileged
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - leviathan
+      validate:
+        message: "Privileged containers are not allowed in the Leviathan application namespace."
+        pattern:
+          spec:
+            "=(ephemeralContainers)":
+              - "=(securityContext)":
+                  "=(privileged)": "false"
+            "=(initContainers)":
+              - "=(securityContext)":
+                  "=(privileged)": "false"
+            containers:
+              - "=(securityContext)":
+                  "=(privileged)": "false"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: leviathan-verify-ecr-keyless
+spec:
+  validationFailureAction: Enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-github-actions-keyless-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - leviathan
+      verifyImages:
+        - imageReferences:
+            - "*.dkr.ecr.ap-south-1.amazonaws.com/leviathan-*:*"
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          imageRegistryCredentials:
+            helpers:
+              - amazon
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/Naveenbana5250/Project-Leviathan/.github/workflows/build-sign.yml@refs/heads/main"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev

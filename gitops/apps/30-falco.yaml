@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: default
+  source:
+    repoURL: https://falcosecurity.github.io/charts
+    chart: falco
+    targetRevision: "9.1.0"
+    helm:
+      values: |
+        driver:
+          kind: modern_ebpf
+        falcosidekick:
+          enabled: true
+          replicaCount: 1
+          webui:
+            enabled: false
+          config:
+            kafka:
+              hostport: "kafka.kafka.svc.cluster.local:9092"
+              topic: "falco-alerts"
+              topiccreation: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 768Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
