@@ -25,7 +25,7 @@ variable "vpc_cidr" {
 variable "node_instance_type" {
   description = "Low-cost worker size that can still run the full demo stack."
   type        = string
-  default     = "t3a.xlarge"
+  default     = "m7i-flex.large"
 }
 
 variable "node_desired_size" {
