@@ -65,13 +65,13 @@ Argo CD                    Build -> ECR -> Cosign
                  |
              Response
 
-*Spark is on-demand in this budget build.
+*Spark runs automatically as a Kubernetes CronJob every minute in the MVP.
 ```
 
 ## Cost-first design
 
 - One EKS cluster
-- One `t3a.xlarge` managed worker by default
+- One `m7i-flex.large` managed worker by default; the node group can temporarily scale to 2 workers for integration/demo load
 - Two AZs, single AWS region
 - Public subnets
 - **No NAT Gateway**
@@ -80,7 +80,7 @@ Argo CD                    Build -> ECR -> Cosign
 - Apache Kafka single combined broker/controller using the official Apache image
 - Neo4j Community single instance
 - Vault standalone
-- Spark on-demand
+- Spark CronJob running every minute
 
 This is a lab architecture, not a production landing zone.
 
@@ -179,10 +179,13 @@ GitHub OIDC, GitOps manifests, signed-image CI/CD, and the main security service
 first signed application images require one bootstrap push because the GitHub OIDC IAM
 role does not exist until Terraform creates it.
 
-For the Friday MVP, Falco is configured to forward alerts to the `falco-alerts` Kafka topic.
-Spark is intentionally on-demand to save memory. The final Spark -> Neo4j enrichment and
-fully imported n8n quarantine workflow remain integration steps after the platform is healthy;
-the repository does not falsely claim those two links are complete before they are tested.
+For the Friday MVP, the automated runtime-response pipeline has been integration-tested
+end to end. Falco detects runtime shell activity and forwards the event through Kafka. Spark
+runs automatically as a Kubernetes CronJob, normalizes the event, calculates risk, and writes
+security relationships into Neo4j. New actionable events with risk >= 70 are sent to n8n,
+which patches the affected Kubernetes pod with the Leviathan quarantine label. Cilium then
+isolates the workload. Neo4j-backed event state prevents the same historical event from
+triggering containment repeatedly.
 
 ## Security notes
 
@@ -191,5 +194,5 @@ the repository does not falsely claim those two links are complete before they a
 - The fake AWS credential in the honeytoken manifest is deliberately non-valid decoy data.
 - The demo application retains non-sensitive demo-only database credentials from the upstream
   voting sample. Replace them with Vault-backed values if this moves beyond a short-lived lab.
-- `public_access_cidrs = ["0.0.0.0/0"]` is convenient for first bootstrap but should be
-  narrowed to your current public IP `/32` once connectivity is confirmed.
+- `public_access_cidrs = ["0.0.0.0/0"]` is intentionally retained for this short-lived
+  demo environment. A non-demo deployment should restrict Kubernetes API access.
