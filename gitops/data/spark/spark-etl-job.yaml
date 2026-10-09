@@ -128,6 +128,62 @@ data:
             "Neo4j write failed: " + json.dumps(result["errors"])
         )
 
+    actionable = [
+        row for row in rows
+        if (row.get("risk_score") or 0) >= 70
+        and row.get("namespace") == "leviathan"
+        and row.get("pod")
+    ]
+
+    if not actionable:
+        raise RuntimeError(
+            "No actionable event found for automated containment."
+        )
+
+    latest = max(
+        actionable,
+        key=lambda row: row.get("event_time") or ""
+    )
+
+    containment_event = {
+        "event_id": latest.get("event_id"),
+        "namespace": latest.get("namespace"),
+        "pod": latest.get("pod"),
+        "risk": latest.get("risk_score"),
+        "rule": latest.get("rule"),
+        "severity": latest.get("severity"),
+        "command": latest.get("command"),
+    }
+
+    n8n_url = (
+        "http://n8n.n8n.svc.cluster.local:5678/"
+        "webhook/leviathan-containment"
+    )
+
+    n8n_request = urllib.request.Request(
+        n8n_url,
+        data=json.dumps(containment_event).encode(),
+        headers={
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+
+    with urllib.request.urlopen(
+        n8n_request,
+        timeout=20
+    ) as response:
+        n8n_status = response.status
+        n8n_body = response.read().decode()
+
+    print(
+        "LEVIATHAN_N8N_OK "
+        f"pod={containment_event['pod']} "
+        f"risk={containment_event['risk']} "
+        f"status={n8n_status}",
+        flush=True
+    )
+
     print(
         f"LEVIATHAN_ETL_OK normalized={len(rows)} neo4j_written={len(rows)}",
         flush=True
