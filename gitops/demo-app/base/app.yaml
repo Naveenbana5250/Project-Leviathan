@@ -123,7 +123,7 @@ spec:
     spec:
       containers:
         - name: vote
-          image: REPLACE_VOTE_IMAGE
+          image: 316899785097.dkr.ecr.ap-south-1.amazonaws.com/leviathan-vote:7bb25b59c89f214988baefd252cd4e37118066a5
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -172,7 +172,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: REPLACE_WORKER_IMAGE
+          image: 316899785097.dkr.ecr.ap-south-1.amazonaws.com/leviathan-worker:7bb25b59c89f214988baefd252cd4e37118066a5
           resources:
             requests:
               cpu: 50m
@@ -203,7 +203,7 @@ spec:
     spec:
       containers:
         - name: result
-          image: REPLACE_RESULT_IMAGE
+          image: 316899785097.dkr.ecr.ap-south-1.amazonaws.com/leviathan-result:7bb25b59c89f214988baefd252cd4e37118066a5
           resources:
             requests:
               cpu: 50m

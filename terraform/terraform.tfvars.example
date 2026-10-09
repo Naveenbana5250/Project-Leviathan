@@ -2,8 +2,10 @@ aws_region         = "ap-south-1"
 cluster_name       = "leviathan-eks"
 kubernetes_version = "1.36"
 
-github_owner  = "Naveenbana5250"
-github_repo   = "Project-Leviathan"
+github_owner    = "Naveenbana5250"
+github_owner_id = "176170264"
+github_repo     = "Project-Leviathan"
+github_repo_id  = "1411821239"
 github_branch = "main"
 
 node_instance_type = "m7i-flex.large"

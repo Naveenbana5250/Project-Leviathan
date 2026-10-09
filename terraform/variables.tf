@@ -54,6 +54,18 @@ variable "github_owner" {
   default     = "Naveenbana5250"
 }
 
+variable "github_owner_id" {
+  description = "Immutable GitHub owner ID used in OIDC subject claims."
+  type        = string
+  default     = "176170264"
+}
+
+variable "github_repo_id" {
+  description = "Immutable GitHub repository ID used in OIDC subject claims."
+  type        = string
+  default     = "1411821239"
+}
+
 variable "github_repo" {
   description = "GitHub repository used for CI/CD."
   type        = string
