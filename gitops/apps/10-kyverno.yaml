@@ -21,6 +21,8 @@ spec:
               value: ap-south-1
         admissionController:
           replicas: 1
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
           rbac:
             serviceAccount:
               annotations:
