@@ -1,3 +1,9 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: n8n-responder
+  namespace: n8n
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,6 +20,7 @@ spec:
         app: n8n
     spec:
       enableServiceLinks: false
+      serviceAccountName: n8n-responder
       containers:
         - name: n8n
           image: docker.n8n.io/n8nio/n8n:2.42.3
@@ -24,6 +31,17 @@ spec:
               value: "false"
             - name: N8N_ENCRYPTION_KEY
               value: "demo-only-change-after-first-login"
+            - name: N8N_BLOCK_ENV_ACCESS_IN_NODE
+              value: "false"
+            - name: KUBE_API
+              value: "https://kubernetes.default.svc"
+            - name: KUBE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: n8n-responder-token
+                  key: token
+            - name: NODE_EXTRA_CA_CERTS
+              value: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
           ports:
             - containerPort: 5678
           resources:
