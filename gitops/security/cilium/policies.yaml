@@ -132,3 +132,44 @@ spec:
               protocol: TCP
             - port: "15014"
               protocol: TCP
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: redis-only-vote-worker
+  namespace: leviathan
+spec:
+  endpointSelector:
+    matchLabels:
+      app: redis
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: vote
+        - matchLabels:
+            app: worker
+      toPorts:
+        - ports:
+            - port: "6379"
+              protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: db-only-worker-result
+  namespace: leviathan
+spec:
+  endpointSelector:
+    matchLabels:
+      app: db
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: worker
+        - matchLabels:
+            app: result
+      toPorts:
+        - ports:
+            - port: "5432"
+              protocol: TCP
