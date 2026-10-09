@@ -29,7 +29,7 @@ spec:
           leviathan-rules.yaml: |-
             - rule: Leviathan Shell Spawned In Container
               desc: Detect an interactive or command shell spawned inside a container
-              condition: evt.type in (execve, execveat) and evt.dir=< and container.id != host and proc.name in (sh, bash, ash, zsh)
+              condition: evt.type in (execve, execveat) and container.id != host and proc.name in (sh, bash, ash, zsh)
               output: "LEVIATHAN_RUNTIME_ALERT shell spawned in container (container=%container.name command=%proc.cmdline user=%user.name)"
               priority: WARNING
               tags: [container, runtime, leviathan]
@@ -43,6 +43,7 @@ spec:
               hostport: "kafka.kafka.svc.cluster.local:9092"
               topic: "falco-alerts"
               topiccreation: true
+              requiredacks: ONE
         resources:
           requests:
             cpu: 50m

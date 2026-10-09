@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-create-security-topics
+  namespace: kafka
+spec:
+  backoffLimit: 10
+  template:
+    metadata:
+      labels:
+        app: kafka-topic-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topics
+          image: apache/kafka:4.3.1
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              until /opt/kafka/bin/kafka-broker-api-versions.sh \
+                --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                >/dev/null 2>&1
+              do
+                echo "Waiting for Kafka..."
+                sleep 2
+              done
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka.kafka.svc.cluster.local:9092 \
+                --create \
+                --if-not-exists \
+                --topic falco-alerts \
+                --partitions 1 \
+                --replication-factor 1
+
+              echo "falco-alerts topic ready"
