@@ -14,6 +14,8 @@ spec:
     helm:
       values: |
         pilot:
+          autoscaleEnabled: false
+          replicaCount: 1
           resources:
             requests:
               cpu: 100m
