@@ -22,6 +22,18 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.public_subnets
 
+  # Allow the EKS control plane to reach the Istio admission webhook.
+  node_security_group_additional_rules = {
+    ingress_cluster_15017_istio_webhook = {
+      description                   = "Cluster API to Istio webhook 15017/tcp"
+      protocol                      = "tcp"
+      from_port                     = 15017
+      to_port                       = 15017
+      type                          = "ingress"
+      source_cluster_security_group = true
+    }
+  }
+
   # VPC CNI is required temporarily so the EKS managed node can bootstrap.
   # Cilium later takes over ENI/IPAM management.
   addons = {
