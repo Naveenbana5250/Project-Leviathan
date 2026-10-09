@@ -1,0 +1,132 @@
+[
+  {
+    "name": "Leviathan Automated Containment",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "leviathan-containment",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.2,
+        "position": [
+          0,
+          0
+        ],
+        "id": "64f9b761-9de7-4e3d-81c1-9861b33bbbb8",
+        "name": "Webhook",
+        "webhookId": "c9609190-b304-4a93-b94e-090365fcbb2b"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "cccfaa24-f546-4e33-a6b3-dde632045ea0",
+                "leftValue": "={{ $json.body.namespace }}",
+                "rightValue": "leviathan",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals",
+                  "name": "filter.operator.equals"
+                }
+              },
+              {
+                "id": "9d988518-fbf2-40d9-817c-e5780146c8a4",
+                "leftValue": "={{ $json.body.risk }}",
+                "rightValue": 70,
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          224,
+          0
+        ],
+        "id": "77cbe0e5-73bc-4b17-86ff-70ae94df4de6",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.KUBE_API + '/api/v1/namespaces/leviathan/pods/' + $json.body.pod }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "={{ 'Bearer ' + $env.KUBE_TOKEN }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "=application/merge-patch+json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "{\n  \"metadata\": {\n    \"labels\": {\n      \"leviathan.io/quarantine\": \"true\"\n    }\n  }\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          448,
+          -96
+        ],
+        "id": "8abcf953-b748-45a7-958f-39eea3076455",
+        "name": "HTTP Request"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "nodeGroups": [],
+    "pinData": {},
+    "tags": []
+  }
+]
