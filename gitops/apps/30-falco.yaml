@@ -15,6 +15,24 @@ spec:
       values: |
         driver:
           kind: modern_ebpf
+
+        # This lab has no NAT Gateway, so Falco must not download
+        # rules dynamically from the Internet at pod startup.
+        falcoctl:
+          artifact:
+            install:
+              enabled: false
+            follow:
+              enabled: false
+
+        customRules:
+          leviathan-rules.yaml: |-
+            - rule: Leviathan Shell Spawned In Container
+              desc: Detect an interactive or command shell spawned inside a container
+              condition: evt.type in (execve, execveat) and evt.dir=< and container.id != host and proc.name in (sh, bash, ash, zsh)
+              output: "LEVIATHAN_RUNTIME_ALERT shell spawned in container (container=%container.name command=%proc.cmdline user=%user.name)"
+              priority: WARNING
+              tags: [container, runtime, leviathan]
         falcosidekick:
           enabled: true
           replicaCount: 1
